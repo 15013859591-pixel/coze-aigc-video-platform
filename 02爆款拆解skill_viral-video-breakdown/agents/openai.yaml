@@ -1,0 +1,4 @@
+interface:
+  display_name: "爆款视频拆解"
+  short_description: "按固定飞书字段拆解爆款与Badcase并输出分镜证据"
+  default_prompt: "Use $viral-video-breakdown to analyze this video and return one Feishu-ready 22-field record."
