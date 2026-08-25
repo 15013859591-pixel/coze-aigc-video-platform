@@ -94,7 +94,7 @@ export interface ReviewSubmissionResponse {
 }
 
 const DEFAULT_AIME_API_BASE_URL =
-  'https://seekers-released-generations-blue.trycloudflare.com';
+  'https://coze-video-aime-service.onrender.com';
 
 const configuredBaseUrl = (
   process.env.NEXT_PUBLIC_AIME_API_BASE_URL || DEFAULT_AIME_API_BASE_URL
