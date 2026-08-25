@@ -93,8 +93,8 @@ export interface ReviewSubmissionResponse {
   submitted_at: string;
 }
 
-const DEFAULT_AIME_API_BASE_URL =
-  'https://seekers-released-generations-blue.trycloudflare.com';
+export const DEFAULT_AIME_API_BASE_URL =
+  'https://swing-legitimate-losses-functioning.trycloudflare.com';
 
 const configuredBaseUrl = (
   process.env.NEXT_PUBLIC_AIME_API_BASE_URL || DEFAULT_AIME_API_BASE_URL
