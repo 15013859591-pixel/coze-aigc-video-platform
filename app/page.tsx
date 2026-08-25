@@ -60,6 +60,19 @@ const initialClips: UiClip[] = [
 const clipLabels = ['痛点钩子', '选择模板', '结果证明', '任务演示', '成片收口'];
 const clipColors = ['slate', 'purple', 'orange', 'blue', 'green'];
 
+const featureTags = [
+  '视频任务', 'AI团队', '新建Agent', '技能商店', '云设备', 'Excel任务', '综合功能',
+  '编程项目', '设计任务', '写作任务', '主agent-拟人心智', 'PPT任务', '日程管理',
+];
+
+const sceneTaxonomy: Record<string, string[]> = {
+  '自媒体与内容创作': ['AI漫剧与短剧', '自媒体', '网文与创作', '广告营销'],
+  '专业领域与科研': ['职场提效', '财务与合规', '代码与研发', '金融与理财', '学术与教育', '人力资源管理', '法律咨询'],
+  '无场景': ['无场景'],
+  '泛生活与个人成长': ['个人提效', '旅行与消费', '个人求职'],
+  '创业与商业变现': ['电商', '一人公司', '个体户', '游戏开发'],
+};
+
 function toUiClips(timeline: Timeline): UiClip[] {
   return timeline.clips.map((clip, index) => ({
     ...clip,
@@ -82,9 +95,11 @@ export default function Home() {
   const [running, setRunning] = useState(true);
   const [clips, setClips] = useState(initialClips);
   const [timelineEdited, setTimelineEdited] = useState(false);
-  const [objective, setObjective] = useState('付费 × 次留双高');
-  const [feature, setFeature] = useState('新建 Agent');
-  const [scene, setScene] = useState('自媒体运营');
+  const [objective, setObjective] = useState('付费次留双高');
+  const [feature, setFeature] = useState('新建Agent');
+  const [scenePrimary, setScenePrimary] = useState('自媒体与内容创作');
+  const [sceneSecondary, setSceneSecondary] = useState('自媒体');
+  const [videoDuration, setVideoDuration] = useState(40);
   const [explore, setExplore] = useState(20);
   const [created, setCreated] = useState(false);
   const [activeJob, setActiveJob] = useState<GenerationJob | null>(null);
@@ -126,21 +141,23 @@ export default function Home() {
   };
 
   const submitJob = async () => {
-    const objectiveMap: Record<string, string> = { '高点击': 'CTR', '高付费': 'PAYMENT', '高留存': 'RETENTION', '付费 × 次留双高': 'PAYMENT_AND_RETENTION' };
-    const featureMap: Record<string, string> = { '新建 Agent': 'CREATE_AGENT', 'AI 团队': 'AI_TEAM', '技能调用': 'SKILL_INVOCATION', '生成文件 / PPT': 'GENERATE_DOCUMENT' };
-    const sceneMap: Record<string, string> = { '自媒体运营': 'SELF_MEDIA_OPERATION', '项目管理': 'PROJECT_MANAGEMENT', '行业研究': 'INDUSTRY_RESEARCH', '办公提效': 'OFFICE_PRODUCTIVITY' };
+    const objectiveMap: Record<string, string> = {
+      '付费次留双高': 'PAYMENT_HIGH_RETENTION_HIGH',
+      '付费高，次留低': 'PAYMENT_HIGH_RETENTION_LOW',
+      '付费低，次留高': 'PAYMENT_LOW_RETENTION_HIGH',
+    };
     const payload: GenerationJobCreate = {
       objective: objectiveMap[objective] ?? objective,
-      feature: featureMap[feature] ?? feature,
-      selling_point: 'ROLE_TEMPLATE_READY_TO_USE',
-      scene: sceneMap[scene] ?? scene,
+      feature,
+      selling_point: feature,
+      scene: `${scenePrimary}/${sceneSecondary}`,
       audience: 'CONTENT_OPERATOR',
       channel: 'PAID_AD',
-      duration_seconds: 40,
+      duration_seconds: videoDuration,
       aspect_ratio: '9:16',
-      video_structure: 'NATURAL_UI_INTEGRATION',
-      ui_depth: 'FULL_USE_CASE',
-      candidate_count: 5,
+      video_structure: 'SYSTEM_DEFAULT',
+      ui_depth: 'SYSTEM_DEFAULT',
+      candidate_count: 1,
       challenger_ratio: explore / 100,
       require_real_ui: true,
       auto_submit_review: true,
@@ -320,7 +337,9 @@ export default function Home() {
               <CreateTask
                 objective={objective} setObjective={setObjective}
                 feature={feature} setFeature={setFeature}
-                scene={scene} setScene={setScene}
+                scenePrimary={scenePrimary} setScenePrimary={setScenePrimary}
+                sceneSecondary={sceneSecondary} setSceneSecondary={setSceneSecondary}
+                videoDuration={videoDuration} setVideoDuration={setVideoDuration}
                 explore={explore} setExplore={setExplore}
                 onSubmit={submitJob}
                 submitting={busy === 'create'}
@@ -360,7 +379,7 @@ function TaskDetail({ detailTab, setDetailTab, running, setRunning, clips, moveC
           <div>
             <div className="title-line"><p className="section-label">{activeJob?.job_id ?? 'VID-0825-014'} · GENERATION JOB</p><span className="status-pill"><i /> {activeJob?.stage ?? 'UI_EXECUTING'}</span></div>
             <h2>职业模板 × 自媒体运营</h2>
-            <div className="tag-row"><span>付费 × 次留双高</span><span>{activeJob?.message ?? '高付费素材'}</span><span>{progress}% · 40 秒 · 9:16</span><span>真实 UI 深度展示</span></div>
+            <div className="tag-row"><span>付费次留双高</span><span>{activeJob?.message ?? '付费与次留目标素材'}</span><span>{progress}% · 40 秒</span><span>真实 UI 证据</span></div>
           </div>
         </div>
         <div className="hero-operations"><button onClick={onRetry} disabled={busy === 'retry'}>{busy === 'retry' ? '重试中…' : '重试节点'}</button><button className="dark" onClick={onRender} disabled={busy === 'render'}>{busy === 'render' ? '触发中…' : '触发渲染'}</button></div>
@@ -494,18 +513,52 @@ function ReviewView({ activeJob, media, busy, onSubmitReview }: { activeJob: Gen
   );
 }
 
-function CreateTask({ objective, setObjective, feature, setFeature, scene, setScene, explore, setExplore, onSubmit, submitting }: { objective: string; setObjective: (v:string)=>void; feature: string; setFeature:(v:string)=>void; scene:string; setScene:(v:string)=>void; explore:number; setExplore:(v:number)=>void; onSubmit:()=>void; submitting: boolean }) {
+function CreateTask({ objective, setObjective, feature, setFeature, scenePrimary, setScenePrimary, sceneSecondary, setSceneSecondary, videoDuration, setVideoDuration, explore, setExplore, onSubmit, submitting }: {
+  objective: string;
+  setObjective: (value: string) => void;
+  feature: string;
+  setFeature: (value: string) => void;
+  scenePrimary: string;
+  setScenePrimary: (value: string) => void;
+  sceneSecondary: string;
+  setSceneSecondary: (value: string) => void;
+  videoDuration: number;
+  setVideoDuration: (value: number) => void;
+  explore: number;
+  setExplore: (value: number) => void;
+  onSubmit: () => void;
+  submitting: boolean;
+}) {
+  const updatePrimaryScene = (value: string) => {
+    setScenePrimary(value);
+    setSceneSecondary(sceneTaxonomy[value][0]);
+  };
+
   return (
     <div className="create-page">
-      <div className="page-heading"><div><p className="section-label">CREATE GENERATION JOB</p><h2>创建视频生成任务</h2><span>只选择业务目标，系统自动检索案例、编译 Prompt 并生成完整多轨合同。</span></div><button className="secondary-button">保存草稿</button></div>
+      <div className="page-heading"><div><p className="section-label">CREATE GENERATION JOB</p><h2>创建视频生成任务</h2><span>按付费与次留目标、正式标签和视频时长创建单条视频任务。</span></div><button className="secondary-button">保存草稿</button></div>
       <div className="create-grid">
         <section className="form-card">
-          <div className="form-section"><div className="form-title"><span>01</span><div><strong>视频目标</strong><small>决定案例筛选、评分器和公式权重</small></div></div><div className="option-grid four">{['高点击','高付费','高留存','付费 × 次留双高'].map((item)=><button className={objective===item?'selected':''} onClick={()=>setObjective(item)} key={item}>{item}{objective===item&&<i>✓</i>}</button>)}</div></div>
-          <div className="form-section"><div className="form-title"><span>02</span><div><strong>宣发内容</strong><small>来自风神标签和当前有效产品能力</small></div></div><div className="field-grid"><label>功能<select value={feature} onChange={(e)=>setFeature(e.target.value)}><option>新建 Agent</option><option>AI 团队</option><option>技能调用</option><option>生成文件 / PPT</option></select></label><label>核心卖点<select><option>职业模板开箱即用</option><option>多 Agent 协同</option><option>复杂任务自动执行</option></select></label><label>应用场景<select value={scene} onChange={(e)=>setScene(e.target.value)}><option>自媒体运营</option><option>项目管理</option><option>行业研究</option><option>办公提效</option></select></label><label>目标人群<select><option>内容运营 / 创作者</option><option>团队管理者</option><option>知识工作者</option></select></label></div></div>
-          <div className="form-section"><div className="form-title"><span>03</span><div><strong>视频规格</strong><small>高级参数默认由系统按渠道最优策略选择</small></div></div><div className="field-grid three"><label>渠道<select><option>常规投放</option><option>直播切片</option><option>商品素材</option></select></label><label>视频时长<select><option>40 秒</option><option>30 秒</option><option>45 秒</option><option>60 秒</option></select></label><label>画幅<select><option>9:16 竖屏</option><option>16:9 横屏</option><option>1:1 方形</option></select></label><label>视频结构<select><option>自然融入型</option><option>故事 + UI 证明</option><option>功能强演示型</option></select></label><label>真实 UI 深度<select><option>深度展示 · 完整用例</option><option>标准展示 · 关键节点</option><option>轻展示 · 结果证明</option></select></label><label>每次生成<select><option>5 条</option><option>8 条</option><option>10 条</option></select></label></div></div>
+          <div className="form-section">
+            <div className="form-title"><span>01</span><div><strong>视频目标</strong><small>只使用当前业务关注的付费与次留组合</small></div></div>
+            <div className="option-grid three">{['付费次留双高', '付费高，次留低', '付费低，次留高'].map((item) => <button className={objective === item ? 'selected' : ''} onClick={() => setObjective(item)} key={item}>{item}{objective === item && <i>✓</i>}</button>)}</div>
+          </div>
+          <div className="form-section">
+            <div className="form-title"><span>02</span><div><strong>宣发内容</strong><small>字段与后续飞书多维表格标签保持一致</small></div></div>
+            <div className="field-grid">
+              <label>功能卖点一级标签（功能）<select value={feature} onChange={(event) => setFeature(event.target.value)}>{featureTags.map((item) => <option key={item}>{item}</option>)}</select></label>
+              <label>素材场景一级标签<select value={scenePrimary} onChange={(event) => updatePrimaryScene(event.target.value)}>{Object.keys(sceneTaxonomy).map((item) => <option key={item}>{item}</option>)}</select></label>
+              <label>素材场景二级标签<select value={sceneSecondary} onChange={(event) => setSceneSecondary(event.target.value)}>{sceneTaxonomy[scenePrimary].map((item) => <option key={item}>{item}</option>)}</select></label>
+              <label>目标人群<select><option>内容运营 / 创作者</option><option>团队管理者</option><option>知识工作者</option></select></label>
+            </div>
+          </div>
+          <div className="form-section">
+            <div className="form-title"><span>03</span><div><strong>视频规格</strong><small>单次只生成1条，其他参数由生产策略自动确定</small></div></div>
+            <div className="field-grid single"><label>视频时长<select value={videoDuration} onChange={(event) => setVideoDuration(Number(event.target.value))}><option value={30}>30 秒</option><option value={40}>40 秒</option><option value={45}>45 秒</option><option value={60}>60 秒</option></select></label></div>
+          </div>
           <div className="form-section"><div className="form-title"><span>04</span><div><strong>探索与边界</strong><small>线上 Champion 保持稳定，留出小部分探索新机制</small></div></div><div className="explore-control"><div><span>Challenger 探索比例</span><strong>{explore}%</strong></div><input type="range" min="0" max="40" step="5" value={explore} onChange={(e)=>setExplore(Number(e.target.value))}/><p><span style={{width:`${100-explore}%`}}>Champion {100-explore}%</span><i style={{width:`${explore}%`}}>Challenger {explore}%</i></p></div><div className="boundary-row"><label><input type="checkbox" defaultChecked/> 必须使用真实扣子 UI</label><label><input type="checkbox" defaultChecked/> 禁止虚假数据与稀缺性</label><label><input type="checkbox" defaultChecked/> 自动送审变色龙</label></div></div>
         </section>
-        <aside className="job-preview"><p className="section-label">JOB PREVIEW</p><h3>任务预览</h3><div className="preview-summary"><span>目标</span><strong>{objective}</strong></div><div className="preview-summary"><span>功能 × 场景</span><strong>{feature} × {scene}</strong></div><div className="preview-summary"><span>运行模式</span><strong>{isAimeApiConfigured ? 'Aime API 联调' : '前端演示模式'}</strong></div><div className="preview-flow">{['检索案例','生成脚本','UI 执行','AIGC 镜头','自动合成','质检送审'].map((item,index)=><div key={item}><span>{index+1}</span><p><strong>{item}</strong><small>{index===0?'6 Goodcase + 3 Badcase':'自动完成'}</small></p></div>)}</div><div className="estimate"><div><span>预计耗时</span><strong>18–25 分钟</strong></div><div><span>输出</span><strong>5 条候选视频</strong></div></div><button className="submit-job" onClick={onSubmit} disabled={submitting}>{submitting ? '正在创建 Aime 任务…' : '开始全自动生成'} <span>→</span></button><small className="submit-note">Prompt、公式和模型版本会自动记录，可追溯和回滚。</small></aside>
+        <aside className="job-preview"><p className="section-label">JOB PREVIEW</p><h3>任务预览</h3><div className="preview-summary"><span>目标</span><strong>{objective}</strong></div><div className="preview-summary"><span>功能卖点</span><strong>{feature}</strong></div><div className="preview-summary"><span>场景</span><strong>{scenePrimary} / {sceneSecondary}</strong></div><div className="preview-summary"><span>视频时长</span><strong>{videoDuration} 秒</strong></div><div className="preview-flow">{['检索案例','生成脚本','UI 执行','AIGC 镜头','自动合成','质检送审'].map((item,index)=><div key={item}><span>{index+1}</span><p><strong>{item}</strong><small>{index===0?'按付费与次留目标检索':'自动完成'}</small></p></div>)}</div><div className="estimate"><div><span>预计耗时</span><strong>18–25 分钟</strong></div><div><span>输出</span><strong>1 条视频</strong></div></div><button className="submit-job" onClick={onSubmit} disabled={submitting}>{submitting ? '正在创建 Aime 任务…' : '开始全自动生成'} <span>→</span></button><small className="submit-note">标签、Prompt、公式和模型版本会自动记录，可追溯和回滚。</small></aside>
       </div>
     </div>
   );
@@ -519,7 +572,7 @@ function LearningCenter() {
       <div className="learning-grid">
         <section className="strategy-arena"><div className="card-head"><div><p className="section-label">CHAMPION VS CHALLENGER</p><h3>策略竞技场</h3></div><button>查看全部实验</button></div><div className="duel"><article className="champion"><div><span>CHAMPION</span><em>线上 v12</em></div><h4>职业模板开箱证明公式</h4><p>痛点点名 → 模板选择 → 技能证据 → 真实任务 → 结果兑现</p><dl><div><dt>历史样本</dt><dd>42</dd></div><div><dt>付费提升</dt><dd>+14.8%</dd></div><div><dt>置信度</dt><dd>0.86</dd></div></dl></article><div className="versus">VS</div><article className="challenger"><div><span>CHALLENGER</span><em>候选 v13</em></div><h4>结果前置 + 倒叙 UI 证明</h4><p>先展示成果 → 回放模板创建 → 技能解释 → 体验 CTA</p><dl><div><dt>回放得分</dt><dd>91</dd></div><div><dt>探索配额</dt><dd>20%</dd></div><div><dt>当前状态</dt><dd>人工抽查</dd></div></dl></article></div><div className="experiment-bar"><span style={{width:'80%'}}>Champion 80%</span><i style={{width:'20%'}}>Challenger 20%</i></div></section>
         <aside className="weekly-pipeline"><div className="card-head"><div><p className="section-label">WEEKLY PIPELINE</p><h3>本周自动学习</h3></div><span>周三触发</span></div>{['指标抓取与创意族去重','22 字段增量拆解','重新标注 Good / Bad / 待观察','挖掘公式与失效条件','生成 Challenger 与历史回放','小流量测试 / 晋级 / 回滚'].map((item,index)=><div className={`weekly-step ${index<4?'done':index===4?'active':''}`} key={item}><span>{index<4?'✓':index+1}</span><div><strong>{item}</strong><small>{index<4?'已完成':index===4?'运行中 · 1/3 通过':'等待指标成熟'}</small></div></div>)}</aside>
-        <section className="candidate-table"><div className="card-head"><div><p className="section-label">CANDIDATE FORMULAS</p><h3>本周新发现的公式候选</h3></div><span>支持数与失效条件同时记录</span></div><div className="table-head"><span>候选机制</span><span>适用条件</span><span>支持</span><span>回放分</span><span>状态</span></div><div className="table-row"><strong>结果前置 + 倒叙 UI 证明</strong><span>高点击 · 新建 Agent</span><span>8</span><span>91</span><em className="reviewing">人工抽查</em></div><div className="table-row"><strong>技能数量量化 + 任务兑现</strong><span>高付费 · 自媒体</span><span>5</span><span>84</span><em>研究候选</em></div><div className="table-row"><strong>三段 Agent 接力状态切换</strong><span>留存 · AI 团队</span><span>4</span><span>88</span><em>历史回放</em></div></section>
+        <section className="candidate-table"><div className="card-head"><div><p className="section-label">CANDIDATE FORMULAS</p><h3>本周新发现的公式候选</h3></div><span>支持数与失效条件同时记录</span></div><div className="table-head"><span>候选机制</span><span>适用条件</span><span>支持</span><span>回放分</span><span>状态</span></div><div className="table-row"><strong>结果前置 + 倒叙 UI 证明</strong><span>付费次留双高 · 新建Agent</span><span>8</span><span>91</span><em className="reviewing">人工抽查</em></div><div className="table-row"><strong>技能数量量化 + 任务兑现</strong><span>付费高次留低 · 自媒体</span><span>5</span><span>84</span><em>研究候选</em></div><div className="table-row"><strong>三段 Agent 接力状态切换</strong><span>付费低次留高 · AI团队</span><span>4</span><span>88</span><em>历史回放</em></div></section>
       </div>
     </div>
   );

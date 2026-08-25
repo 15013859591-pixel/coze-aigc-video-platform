@@ -93,7 +93,7 @@ export interface ReviewSubmissionResponse {
   submitted_at: string;
 }
 
-const DEFAULT_AIME_API_BASE_URL =
+export const DEFAULT_AIME_API_BASE_URL =
   'https://coze-video-aime-service.onrender.com';
 
 const configuredBaseUrl = (
