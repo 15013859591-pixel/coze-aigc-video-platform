@@ -41,7 +41,7 @@ export default function Home() {
   return (
     <main className="app-shell">
       <aside className="sidebar">
-        <div className="brand-mark">A</div>
+        <div className="brand-mark">扣</div>
         <nav className="icon-nav" aria-label="主导航">
           <button className="nav-icon active" aria-label="生产工作台"><span>⌂</span></button>
           <button className="nav-icon" aria-label="任务列表"><span>▦</span></button>
@@ -57,8 +57,8 @@ export default function Home() {
       <section className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">AIME CREATIVE LAB</p>
-            <h1>全自动视频生产台</h1>
+            <p className="eyebrow">COZE VIDEO STUDIO</p>
+            <h1>扣子全自动视频素材生产工作台</h1>
           </div>
           <div className="top-actions">
             <button className="ghost-button"><span className="live-dot" />系统正常</button>

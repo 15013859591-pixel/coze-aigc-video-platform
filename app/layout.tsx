@@ -13,16 +13,17 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Aime · 全自动视频生产台',
+  metadataBase: new URL('https://aime-video-studio.spicy-cedar-9771.chatgpt.site'),
+  title: '扣子全自动视频素材生产工作台',
   description: '从爆款数据、脚本生成到真实 UI 录屏与自动剪辑的一体化视频生产工作台。',
   openGraph: {
-    title: 'Aime · 全自动视频生产台',
+    title: '扣子全自动视频素材生产工作台',
     description: '从爆款数据到可投放成片',
-    images: [{ url: '/og.png', width: 1200, height: 630, alt: 'Aime 全自动视频生产台' }],
+    images: [{ url: '/og.png', width: 1200, height: 630, alt: '扣子全自动视频素材生产工作台' }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Aime · 全自动视频生产台',
+    title: '扣子全自动视频素材生产工作台',
     description: '从爆款数据到可投放成片',
     images: ['/og.png'],
   },
