@@ -12,7 +12,7 @@ npm install
 npm run dev
 ```
 
-`NEXT_PUBLIC_AIME_API_BASE_URL` 未配置时，前端默认调用线上 Aime mock 后端（`https://swing-legitimate-losses-functioning.trycloudflare.com`）；如需本地联调，可在 `.env.local` 中覆盖为本地地址。
+`NEXT_PUBLIC_AIME_API_BASE_URL` 未配置时，前端默认调用 Render 上的 Aime mock 后端（`https://coze-video-aime-service.onrender.com`）；如需本地联调，可在 `.env.local` 中覆盖为本地地址。免费实例首次请求可能需要等待冷启动。
 
 ## 已接通的接口
 
