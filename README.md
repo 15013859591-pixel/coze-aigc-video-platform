@@ -12,7 +12,7 @@ npm install
 npm run dev
 ```
 
-`NEXT_PUBLIC_AIME_API_BASE_URL` 未配置时，前端自动进入演示模式；配置后会调用真实 Aime mock 接口。
+`NEXT_PUBLIC_AIME_API_BASE_URL` 未配置时，前端默认调用线上 Aime mock 后端（`https://seekers-released-generations-blue.trycloudflare.com`）；如需本地联调，可在 `.env.local` 中覆盖为本地地址。
 
 ## 已接通的接口
 

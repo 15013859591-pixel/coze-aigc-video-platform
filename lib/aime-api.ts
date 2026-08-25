@@ -93,7 +93,12 @@ export interface ReviewSubmissionResponse {
   submitted_at: string;
 }
 
-const configuredBaseUrl = process.env.NEXT_PUBLIC_AIME_API_BASE_URL?.replace(/\/$/, '') ?? '';
+const DEFAULT_AIME_API_BASE_URL =
+  'https://seekers-released-generations-blue.trycloudflare.com';
+
+const configuredBaseUrl = (
+  process.env.NEXT_PUBLIC_AIME_API_BASE_URL || DEFAULT_AIME_API_BASE_URL
+).replace(/\/$/, '');
 
 export const aimeApiBaseUrl = configuredBaseUrl;
 export const isAimeApiConfigured = Boolean(configuredBaseUrl);
