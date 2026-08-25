@@ -1,6 +1,15 @@
 'use client';
 
-import { useState, type DragEvent } from 'react';
+import { useEffect, useState, type DragEvent } from 'react';
+import {
+  aimeApi,
+  isAimeApiConfigured,
+  type GenerationJob,
+  type GenerationJobCreate,
+  type MediaAsset,
+  type Timeline,
+  type TimelineClip as ApiTimelineClip,
+} from '@/lib/aime-api';
 
 type View = 'tasks' | 'create' | 'learning';
 type DetailTab = 'overview' | 'timeline' | 'evidence' | 'review';
@@ -38,13 +47,29 @@ const qualityChecks = [
   ['变色龙送审', '待提交'],
 ];
 
-const initialClips = [
-  { id: 1, label: '痛点钩子', start: 1, width: 17, color: 'slate' },
-  { id: 2, label: '选择模板', start: 20, width: 19, color: 'purple' },
-  { id: 3, label: '包含技能', start: 41, width: 18, color: 'orange' },
-  { id: 4, label: '输入任务', start: 62, width: 17, color: 'blue' },
-  { id: 5, label: '结果证明', start: 81, width: 18, color: 'green' },
+type UiClip = ApiTimelineClip & { id: number; label: string; start: number; width: number; color: string };
+
+const initialClips: UiClip[] = [
+  { id: 1, shot_id: 'S001_SH01', label: '痛点钩子', start: 1, width: 17, color: 'slate', start_ms: 400, end_ms: 7200, ui_use_case_id: 'UC_HOOK', recording_asset_id: null, composition_mode: 'fullscreen' },
+  { id: 2, shot_id: 'S001_SH02', label: '选择模板', start: 20, width: 19, color: 'purple', start_ms: 8000, end_ms: 15600, ui_use_case_id: 'UC_CREATE_AGENT_TEMPLATE', recording_asset_id: null, composition_mode: 'fullscreen' },
+  { id: 3, shot_id: 'S001_SH03', label: '包含技能', start: 41, width: 18, color: 'orange', start_ms: 16400, end_ms: 23600, ui_use_case_id: 'UC_CREATE_AGENT_TEMPLATE', recording_asset_id: null, composition_mode: 'fullscreen' },
+  { id: 4, shot_id: 'S001_SH04', label: '输入任务', start: 62, width: 17, color: 'blue', start_ms: 24800, end_ms: 31600, ui_use_case_id: 'UC_TASK_INPUT', recording_asset_id: null, composition_mode: 'fullscreen' },
+  { id: 5, shot_id: 'S001_SH05', label: '结果证明', start: 81, width: 18, color: 'green', start_ms: 32400, end_ms: 39600, ui_use_case_id: 'UC_RESULT_DEMO', recording_asset_id: null, composition_mode: 'overlay' },
 ];
+
+const clipLabels = ['痛点钩子', '选择模板', '结果证明', '任务演示', '成片收口'];
+const clipColors = ['slate', 'purple', 'orange', 'blue', 'green'];
+
+function toUiClips(timeline: Timeline): UiClip[] {
+  return timeline.clips.map((clip, index) => ({
+    ...clip,
+    id: index + 1,
+    label: clipLabels[index] ?? clip.shot_id,
+    color: clipColors[index % clipColors.length],
+    start: Number(((clip.start_ms / timeline.duration_ms) * 100).toFixed(1)),
+    width: Number((((clip.end_ms - clip.start_ms) / timeline.duration_ms) * 100).toFixed(1)),
+  }));
+}
 
 function NavButton({ label, glyph, active, onClick }: { label: string; glyph: string; active?: boolean; onClick: () => void }) {
   return <button className={`nav-icon ${active ? 'active' : ''}`} aria-label={label} title={label} onClick={onClick}><span>{glyph}</span></button>;
@@ -62,6 +87,27 @@ export default function Home() {
   const [scene, setScene] = useState('自媒体运营');
   const [explore, setExplore] = useState(20);
   const [created, setCreated] = useState(false);
+  const [activeJob, setActiveJob] = useState<GenerationJob | null>(null);
+  const [timelineVersion, setTimelineVersion] = useState(3);
+  const [timelineDuration, setTimelineDuration] = useState(40000);
+  const [media, setMedia] = useState<MediaAsset[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const activeJobId = activeJob?.job_id;
+
+  useEffect(() => {
+    if (!activeJobId || !isAimeApiConfigured) return;
+    return aimeApi.subscribe(activeJobId, (event) => {
+      setActiveJob((current) => current ? {
+        ...current,
+        stage: event.stage,
+        status: event.node_status,
+        progress: event.progress,
+        message: event.message,
+        updated_at: event.occurred_at,
+      } : current);
+    }, () => setNotice('实时进度连接已结束，可刷新任务状态继续查看。'));
+  }, [activeJobId]);
 
   const moveClip = (event: DragEvent<HTMLButtonElement>, clipId: number) => {
     const track = event.currentTarget.parentElement;
@@ -70,15 +116,119 @@ export default function Home() {
     const clip = clips.find((item) => item.id === clipId);
     if (!clip) return;
     const next = Math.max(0, Math.min(100 - clip.width, ((event.clientX - box.left) / box.width) * 100 - clip.width / 2));
-    setClips((items) => items.map((item) => item.id === clipId ? { ...item, start: Number(next.toFixed(1)) } : item));
+    setClips((items) => items.map((item) => {
+      if (item.id !== clipId) return item;
+      const duration = item.end_ms - item.start_ms;
+      const startMs = Math.round((next / 100) * timelineDuration);
+      return { ...item, start: Number(next.toFixed(1)), start_ms: startMs, end_ms: startMs + duration };
+    }));
     setTimelineEdited(true);
   };
 
-  const submitJob = () => {
-    setCreated(true);
-    setView('tasks');
-    setDetailTab('overview');
-    setRunning(true);
+  const submitJob = async () => {
+    const objectiveMap: Record<string, string> = { '高点击': 'CTR', '高付费': 'PAYMENT', '高留存': 'RETENTION', '付费 × 次留双高': 'PAYMENT_AND_RETENTION' };
+    const featureMap: Record<string, string> = { '新建 Agent': 'CREATE_AGENT', 'AI 团队': 'AI_TEAM', '技能调用': 'SKILL_INVOCATION', '生成文件 / PPT': 'GENERATE_DOCUMENT' };
+    const sceneMap: Record<string, string> = { '自媒体运营': 'SELF_MEDIA_OPERATION', '项目管理': 'PROJECT_MANAGEMENT', '行业研究': 'INDUSTRY_RESEARCH', '办公提效': 'OFFICE_PRODUCTIVITY' };
+    const payload: GenerationJobCreate = {
+      objective: objectiveMap[objective] ?? objective,
+      feature: featureMap[feature] ?? feature,
+      selling_point: 'ROLE_TEMPLATE_READY_TO_USE',
+      scene: sceneMap[scene] ?? scene,
+      audience: 'CONTENT_OPERATOR',
+      channel: 'PAID_AD',
+      duration_seconds: 40,
+      aspect_ratio: '9:16',
+      video_structure: 'NATURAL_UI_INTEGRATION',
+      ui_depth: 'FULL_USE_CASE',
+      candidate_count: 5,
+      challenger_ratio: explore / 100,
+      require_real_ui: true,
+      auto_submit_review: true,
+    };
+
+    setBusy('create');
+    setNotice(null);
+    try {
+      if (isAimeApiConfigured) {
+        const job = await aimeApi.createJob(payload);
+        const nextTimeline = await aimeApi.getTimeline(job.job_id);
+        setActiveJob(job);
+        setTimelineVersion(nextTimeline.version);
+        setTimelineDuration(nextTimeline.duration_ms);
+        setClips(toUiClips(nextTimeline));
+        setNotice(`${job.job_id} 已由 Aime API 创建，实时进度已接通。`);
+      } else {
+        setActiveJob({ job_id: 'VID-DEMO-001', status: 'RUNNING', stage: 'CREATED', progress: 0, message: '演示任务已在浏览器创建', request: payload, created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+        setNotice('当前为演示模式；配置 Aime API 地址后，同一按钮会创建真实后端任务。');
+      }
+      setCreated(true);
+      setView('tasks');
+      setDetailTab('overview');
+      setRunning(true);
+    } catch (error) {
+      setNotice(`创建失败：${error instanceof Error ? error.message : '未知错误'}`);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const runAction = async (action: 'retry' | 'render') => {
+    if (!activeJob || !isAimeApiConfigured) {
+      setNotice('演示模式已记录操作；部署 Aime 服务并配置地址后将调用真实接口。');
+      return;
+    }
+    setBusy(action);
+    try {
+      const result = action === 'retry' ? await aimeApi.retry(activeJob.job_id) : await aimeApi.render(activeJob.job_id);
+      setActiveJob((current) => current ? { ...current, stage: result.stage, status: result.status, message: result.message } : current);
+      setNotice(result.message);
+    } catch (error) {
+      setNotice(`操作失败：${error instanceof Error ? error.message : '未知错误'}`);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const saveTimeline = async () => {
+    if (!activeJob || !isAimeApiConfigured) {
+      setTimelineVersion((version) => version + 1);
+      setTimelineEdited(false);
+      setNotice('演示时间线已保存到当前页面状态；接通 Aime 后会持久化为后端新版本。');
+      return;
+    }
+    setBusy('timeline');
+    try {
+      const nextTimeline = await aimeApi.updateTimeline(activeJob.job_id, timelineVersion, clips.map(({ shot_id, start_ms, end_ms, ui_use_case_id, recording_asset_id, composition_mode }) => ({ shot_id, start_ms, end_ms, ui_use_case_id, recording_asset_id, composition_mode })));
+      setTimelineVersion(nextTimeline.version);
+      setTimelineDuration(nextTimeline.duration_ms);
+      setClips(toUiClips(nextTimeline));
+      setTimelineEdited(false);
+      setNotice(`时间线 v${nextTimeline.version} 已保存到 Aime。`);
+    } catch (error) {
+      setNotice(`保存失败：${error instanceof Error ? error.message : '未知错误'}`);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const submitReview = async () => {
+    if (!activeJob || !isAimeApiConfigured) {
+      setNotice('演示模式不会伪造审核成功；接通 Aime 后可提交 mock 审核。');
+      return;
+    }
+    setBusy('review');
+    try {
+      const [submission, assets] = await Promise.all([
+        aimeApi.submitReview(activeJob.job_id, '吴斯迈', '前端联调审核提交'),
+        aimeApi.getMedia(activeJob.job_id),
+      ]);
+      setMedia(assets);
+      setNotice(`${submission.status} · ${submission.submission_id}，已同步 ${assets.length} 个媒体条目。`);
+    } catch (error) {
+      setNotice(`送审失败：${error instanceof Error ? error.message : '未知错误'}`);
+    } finally {
+      setBusy(null);
+    }
   };
 
   return (
@@ -104,7 +254,7 @@ export default function Home() {
             <h1>扣子全自动视频素材生产工作台</h1>
           </div>
           <div className="top-actions">
-            <button className="system-status"><span className="live-dot" />5 个引擎正常</button>
+            <button className={`system-status ${isAimeApiConfigured ? 'connected' : ''}`}><span className="live-dot" />{isAimeApiConfigured ? 'Aime API 已连接' : '演示模式 · 待配置 API'}</button>
             <button className="primary-button" onClick={() => setView('create')}><span>＋</span> 新建视频任务</button>
           </div>
         </header>
@@ -146,7 +296,7 @@ export default function Home() {
           </aside>
 
           <section className="main-stage">
-            {created && <div className="success-toast"><span>✓</span> 新任务已创建，系统正在检索案例并生成多候选脚本。<button onClick={() => setCreated(false)}>×</button></div>}
+            {(created || notice) && <div className="success-toast"><span>{notice?.includes('失败') ? '!' : '✓'}</span> {notice ?? '新任务已创建，系统正在检索案例并生成多候选脚本。'}<button onClick={() => { setCreated(false); setNotice(null); }}>×</button></div>}
             {view === 'tasks' && (
               <TaskDetail
                 detailTab={detailTab}
@@ -156,7 +306,14 @@ export default function Home() {
                 clips={clips}
                 moveClip={moveClip}
                 timelineEdited={timelineEdited}
-                setTimelineEdited={setTimelineEdited}
+                activeJob={activeJob}
+                timelineVersion={timelineVersion}
+                busy={busy}
+                media={media}
+                onSaveTimeline={saveTimeline}
+                onRetry={() => runAction('retry')}
+                onRender={() => runAction('render')}
+                onSubmitReview={submitReview}
               />
             )}
             {view === 'create' && (
@@ -166,6 +323,7 @@ export default function Home() {
                 scene={scene} setScene={setScene}
                 explore={explore} setExplore={setExplore}
                 onSubmit={submitJob}
+                submitting={busy === 'create'}
               />
             )}
             {view === 'learning' && <LearningCenter />}
@@ -176,7 +334,7 @@ export default function Home() {
   );
 }
 
-function TaskDetail({ detailTab, setDetailTab, running, setRunning, clips, moveClip, timelineEdited, setTimelineEdited }: {
+function TaskDetail({ detailTab, setDetailTab, running, setRunning, clips, moveClip, timelineEdited, activeJob, timelineVersion, busy, media, onSaveTimeline, onRetry, onRender, onSubmitReview }: {
   detailTab: DetailTab;
   setDetailTab: (tab: DetailTab) => void;
   running: boolean;
@@ -184,20 +342,28 @@ function TaskDetail({ detailTab, setDetailTab, running, setRunning, clips, moveC
   clips: typeof initialClips;
   moveClip: (event: DragEvent<HTMLButtonElement>, clipId: number) => void;
   timelineEdited: boolean;
-  setTimelineEdited: (value: boolean) => void;
+  activeJob: GenerationJob | null;
+  timelineVersion: number;
+  busy: string | null;
+  media: MediaAsset[];
+  onSaveTimeline: () => void;
+  onRetry: () => void;
+  onRender: () => void;
+  onSubmitReview: () => void;
 }) {
+  const progress = Math.round((activeJob?.progress ?? 0.52) * 100);
   return (
     <>
       <section className="task-hero">
         <div className="task-hero-main">
           <div className="brief-icon">职</div>
           <div>
-            <div className="title-line"><p className="section-label">VID-0825-014 · GENERATION JOB</p><span className="status-pill"><i /> UI_EXECUTING</span></div>
+            <div className="title-line"><p className="section-label">{activeJob?.job_id ?? 'VID-0825-014'} · GENERATION JOB</p><span className="status-pill"><i /> {activeJob?.stage ?? 'UI_EXECUTING'}</span></div>
             <h2>职业模板 × 自媒体运营</h2>
-            <div className="tag-row"><span>付费 × 次留双高</span><span>高付费素材</span><span>40 秒 · 9:16</span><span>真实 UI 深度展示</span></div>
+            <div className="tag-row"><span>付费 × 次留双高</span><span>{activeJob?.message ?? '高付费素材'}</span><span>{progress}% · 40 秒 · 9:16</span><span>真实 UI 深度展示</span></div>
           </div>
         </div>
-        <div className="hero-score"><div className="score-ring"><strong>92</strong><span>/100</span></div><div><strong>脚本质量</strong><small>6 Goodcase · 3 Badcase</small><em>Champion 公式 v12</em></div></div>
+        <div className="hero-operations"><button onClick={onRetry} disabled={busy === 'retry'}>{busy === 'retry' ? '重试中…' : '重试节点'}</button><button className="dark" onClick={onRender} disabled={busy === 'render'}>{busy === 'render' ? '触发中…' : '触发渲染'}</button></div>
       </section>
 
       <section className="engine-strip">
@@ -216,9 +382,9 @@ function TaskDetail({ detailTab, setDetailTab, running, setRunning, clips, moveC
       </nav>
 
       {detailTab === 'overview' && <Overview running={running} setRunning={setRunning} />}
-      {detailTab === 'timeline' && <TimelineView clips={clips} moveClip={moveClip} timelineEdited={timelineEdited} setTimelineEdited={setTimelineEdited} />}
+      {detailTab === 'timeline' && <TimelineView clips={clips} moveClip={moveClip} timelineEdited={timelineEdited} timelineVersion={timelineVersion} busy={busy} onSave={onSaveTimeline} />}
       {detailTab === 'evidence' && <EvidenceView />}
-      {detailTab === 'review' && <ReviewView />}
+      {detailTab === 'review' && <ReviewView activeJob={activeJob} media={media} busy={busy} onSubmitReview={onSubmitReview} />}
     </>
   );
 }
@@ -268,14 +434,14 @@ function Overview({ running, setRunning }: { running: boolean; setRunning: (valu
   );
 }
 
-function TimelineView({ clips, moveClip, timelineEdited, setTimelineEdited }: { clips: typeof initialClips; moveClip: (event: DragEvent<HTMLButtonElement>, clipId: number) => void; timelineEdited: boolean; setTimelineEdited: (value: boolean) => void }) {
+function TimelineView({ clips, moveClip, timelineEdited, timelineVersion, busy, onSave }: { clips: UiClip[]; moveClip: (event: DragEvent<HTMLButtonElement>, clipId: number) => void; timelineEdited: boolean; timelineVersion: number; busy: string | null; onSave: () => void }) {
   const tracks = ['口播 / TTS', '画面来源', '真实 UI', '字幕', '音效'];
   return (
     <div className="timeline-layout">
       <section className="contract-card">
         <div className="card-head">
           <div><p className="section-label">MACHINE-EXECUTABLE CONTRACT</p><h3>多轨时间线合同</h3></div>
-          <div className="timeline-actions"><span>{timelineEdited ? '● 新版本未保存' : '✓ timeline_v3 已保存'}</span><button onClick={() => setTimelineEdited(false)} disabled={!timelineEdited}>保存为新版本</button></div>
+          <div className="timeline-actions"><span>{timelineEdited ? '● 新版本未保存' : `✓ timeline_v${timelineVersion} 已保存`}</span><button onClick={onSave} disabled={!timelineEdited || busy === 'timeline'}>{busy === 'timeline' ? '保存中…' : '保存为新版本'}</button></div>
         </div>
         <p className="contract-tip">拖动 UI 片段可以调整开始时间；正式系统会保存为新版本并触发对应渲染节点重跑。</p>
         <div className="time-ruler"><span />{['00:00','00:05','00:10','00:15','00:20','00:25','00:30','00:35','00:40'].map((time) => <i key={time}>{time}</i>)}</div>
@@ -291,8 +457,8 @@ function TimelineView({ clips, moveClip, timelineEdited, setTimelineEdited }: { 
         </div>
       </section>
       <aside className="shot-inspector">
-        <div className="card-head"><div><p className="section-label">SHOT INSPECTOR</p><h3>S001_SH03</h3></div><span className="version-chip">v3</span></div>
-        <dl><div><dt>起止时间</dt><dd>05.2s — 10.4s</dd></div><div><dt>画面来源</dt><dd>real_ui_recording</dd></div><div><dt>用例 ID</dt><dd>UC_CREATE_AGENT_TEMPLATE</dd></div><div><dt>录屏素材</dt><dd className="pending-text">执行后回填</dd></div><div><dt>合成模式</dt><dd>fullscreen</dd></div><div><dt>裁切目标</dt><dd>active_panel</dd></div></dl>
+        <div className="card-head"><div><p className="section-label">SHOT INSPECTOR</p><h3>{clips[1]?.shot_id ?? 'S001_SH02'}</h3></div><span className="version-chip">v{timelineVersion}</span></div>
+        <dl><div><dt>起止时间</dt><dd>{((clips[1]?.start_ms ?? 5200) / 1000).toFixed(1)}s — {((clips[1]?.end_ms ?? 10400) / 1000).toFixed(1)}s</dd></div><div><dt>画面来源</dt><dd>real_ui_recording</dd></div><div><dt>用例 ID</dt><dd>{clips[1]?.ui_use_case_id ?? 'UC_CREATE_AGENT_TEMPLATE'}</dd></div><div><dt>录屏素材</dt><dd className="pending-text">{clips[1]?.recording_asset_id ?? '执行后回填'}</dd></div><div><dt>合成模式</dt><dd>{clips[1]?.composition_mode ?? 'fullscreen'}</dd></div><div><dt>裁切目标</dt><dd>active_panel</dd></div></dl>
         <div className="shot-box"><span>产品事实证据</span><p>页面可见“自媒体运营达人”及至少两项包含技能。</p></div>
         <div className="shot-box warning"><span>失败降级</span><p>UI 执行失败时使用版本化模板列表录屏，不允许让视频模型伪造界面。</p></div>
         <div className="keyframe"><span>06.7s</span><div><i /><b>1.35× 放大</b><small>target: selected_template</small></div></div>
@@ -318,17 +484,17 @@ function EvidenceView() {
   );
 }
 
-function ReviewView() {
+function ReviewView({ activeJob, media, busy, onSubmitReview }: { activeJob: GenerationJob | null; media: MediaAsset[]; busy: string | null; onSubmitReview: () => void }) {
   return (
     <div className="review-layout">
       <section className="quality-card"><div className="card-head"><div><p className="section-label">AUTOMATIC QUALITY GATES</p><h3>自动质检门槛</h3></div><span className="quality-overall">3 / 6 完成</span></div><div className="quality-list">{qualityChecks.map(([label,status], index) => <div key={label}><span className={`quality-check ${index < 3 ? 'passed' : ''}`}>{index < 3 ? '✓' : '○'}</span><strong>{label}</strong><small className={status === '执行中' ? 'running-text' : ''}>{status}</small><button>查看</button></div>)}</div></section>
-      <aside className="submission-card"><p className="section-label">CHAMELEON REVIEW</p><h3>变色龙送审</h3><div className="submission-visual"><span>变</span><div><strong>等待视频质检通过</strong><small>通过后自动提交并保存回执</small></div></div><dl><div><dt>送审版本</dt><dd>render_v4</dd></div><div><dt>当前状态</dt><dd>REVIEW_SUBMITTING</dd></div><div><dt>驳回处理</dt><dd>定位节点后局部重跑</dd></div></dl><button disabled>提交变色龙审核</button><p>接口不可用时进入 NEEDS_HUMAN，不伪造送审成功。</p></aside>
+      <aside className="submission-card"><p className="section-label">CHAMELEON REVIEW</p><h3>变色龙送审</h3><div className="submission-visual"><span>变</span><div><strong>{activeJob ? 'Aime 任务可提交审核' : '等待创建真实任务'}</strong><small>mock 阶段保存审核回执与媒体清单</small></div></div><dl><div><dt>任务 ID</dt><dd>{activeJob?.job_id ?? '—'}</dd></div><div><dt>当前状态</dt><dd>{activeJob?.stage ?? '未连接'}</dd></div><div><dt>媒体条目</dt><dd>{media.length ? `${media.length} 个已同步` : '提交后获取'}</dd></div></dl><button className="review-submit" onClick={onSubmitReview} disabled={busy === 'review'}>{busy === 'review' ? '提交中…' : '提交 Aime mock 审核'}</button><p>接口不可用时不会伪造送审成功；真实飞书送审将在后端替换 mock 实现。</p></aside>
       <section className="version-history"><div className="card-head"><div><p className="section-label">TRACEABLE VERSIONS</p><h3>版本与修改记录</h3></div><button>比较版本</button></div><div className="history-row"><span>v4</span><div><strong>自动修复字幕安全区</strong><small>edit_policy_v7 · 5 分钟前</small></div><em>当前</em></div><div className="history-row"><span>v3</span><div><strong>人工将关键 UI 改为全屏</strong><small>修改人：余 · 12 分钟前</small></div><em>已保留</em></div><div className="history-row"><span>v2</span><div><strong>UI 用例重规划：补充包含技能断言</strong><small>ui_planner_v5 · 18 分钟前</small></div><em>已保留</em></div></section>
     </div>
   );
 }
 
-function CreateTask({ objective, setObjective, feature, setFeature, scene, setScene, explore, setExplore, onSubmit }: { objective: string; setObjective: (v:string)=>void; feature: string; setFeature:(v:string)=>void; scene:string; setScene:(v:string)=>void; explore:number; setExplore:(v:number)=>void; onSubmit:()=>void }) {
+function CreateTask({ objective, setObjective, feature, setFeature, scene, setScene, explore, setExplore, onSubmit, submitting }: { objective: string; setObjective: (v:string)=>void; feature: string; setFeature:(v:string)=>void; scene:string; setScene:(v:string)=>void; explore:number; setExplore:(v:number)=>void; onSubmit:()=>void; submitting: boolean }) {
   return (
     <div className="create-page">
       <div className="page-heading"><div><p className="section-label">CREATE GENERATION JOB</p><h2>创建视频生成任务</h2><span>只选择业务目标，系统自动检索案例、编译 Prompt 并生成完整多轨合同。</span></div><button className="secondary-button">保存草稿</button></div>
@@ -339,7 +505,7 @@ function CreateTask({ objective, setObjective, feature, setFeature, scene, setSc
           <div className="form-section"><div className="form-title"><span>03</span><div><strong>视频规格</strong><small>高级参数默认由系统按渠道最优策略选择</small></div></div><div className="field-grid three"><label>渠道<select><option>常规投放</option><option>直播切片</option><option>商品素材</option></select></label><label>视频时长<select><option>40 秒</option><option>30 秒</option><option>45 秒</option><option>60 秒</option></select></label><label>画幅<select><option>9:16 竖屏</option><option>16:9 横屏</option><option>1:1 方形</option></select></label><label>视频结构<select><option>自然融入型</option><option>故事 + UI 证明</option><option>功能强演示型</option></select></label><label>真实 UI 深度<select><option>深度展示 · 完整用例</option><option>标准展示 · 关键节点</option><option>轻展示 · 结果证明</option></select></label><label>每次生成<select><option>5 条</option><option>8 条</option><option>10 条</option></select></label></div></div>
           <div className="form-section"><div className="form-title"><span>04</span><div><strong>探索与边界</strong><small>线上 Champion 保持稳定，留出小部分探索新机制</small></div></div><div className="explore-control"><div><span>Challenger 探索比例</span><strong>{explore}%</strong></div><input type="range" min="0" max="40" step="5" value={explore} onChange={(e)=>setExplore(Number(e.target.value))}/><p><span style={{width:`${100-explore}%`}}>Champion {100-explore}%</span><i style={{width:`${explore}%`}}>Challenger {explore}%</i></p></div><div className="boundary-row"><label><input type="checkbox" defaultChecked/> 必须使用真实扣子 UI</label><label><input type="checkbox" defaultChecked/> 禁止虚假数据与稀缺性</label><label><input type="checkbox" defaultChecked/> 自动送审变色龙</label></div></div>
         </section>
-        <aside className="job-preview"><p className="section-label">JOB PREVIEW</p><h3>任务预览</h3><div className="preview-summary"><span>目标</span><strong>{objective}</strong></div><div className="preview-summary"><span>功能 × 场景</span><strong>{feature} × {scene}</strong></div><div className="preview-summary"><span>首条 MVP 用例</span><strong>职业模板创建完整链路</strong></div><div className="preview-flow">{['检索案例','生成脚本','UI 执行','AIGC 镜头','自动合成','质检送审'].map((item,index)=><div key={item}><span>{index+1}</span><p><strong>{item}</strong><small>{index===0?'6 Goodcase + 3 Badcase':'自动完成'}</small></p></div>)}</div><div className="estimate"><div><span>预计耗时</span><strong>18–25 分钟</strong></div><div><span>输出</span><strong>5 条候选视频</strong></div></div><button className="submit-job" onClick={onSubmit}>开始全自动生成 <span>→</span></button><small className="submit-note">Prompt、公式和模型版本会自动记录，可追溯和回滚。</small></aside>
+        <aside className="job-preview"><p className="section-label">JOB PREVIEW</p><h3>任务预览</h3><div className="preview-summary"><span>目标</span><strong>{objective}</strong></div><div className="preview-summary"><span>功能 × 场景</span><strong>{feature} × {scene}</strong></div><div className="preview-summary"><span>运行模式</span><strong>{isAimeApiConfigured ? 'Aime API 联调' : '前端演示模式'}</strong></div><div className="preview-flow">{['检索案例','生成脚本','UI 执行','AIGC 镜头','自动合成','质检送审'].map((item,index)=><div key={item}><span>{index+1}</span><p><strong>{item}</strong><small>{index===0?'6 Goodcase + 3 Badcase':'自动完成'}</small></p></div>)}</div><div className="estimate"><div><span>预计耗时</span><strong>18–25 分钟</strong></div><div><span>输出</span><strong>5 条候选视频</strong></div></div><button className="submit-job" onClick={onSubmit} disabled={submitting}>{submitting ? '正在创建 Aime 任务…' : '开始全自动生成'} <span>→</span></button><small className="submit-note">Prompt、公式和模型版本会自动记录，可追溯和回滚。</small></aside>
       </div>
     </div>
   );
