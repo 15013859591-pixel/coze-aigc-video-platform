@@ -1,7 +1,12 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { submitTask, type SubmitTaskPayload } from '../lib/task-queue-client';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  listPendingTasks,
+  submitTask,
+  type QueueTask,
+  type SubmitTaskPayload,
+} from '../lib/task-queue-client';
 
 const videoTargetOptions = ['高点击', '高付费', '高留存', '付费 × 次留双高'];
 const sellingPointLevel1Options = ['模板开箱即用', '真实 UI 演示', '自动化工作流', '一键生成视频素材'];
@@ -15,6 +20,15 @@ const sceneLevel2OptionsByL1: Record<string, string[]> = {
 const audienceOptions = ['内容运营 / 创作者', '团队管理者', '知识工作者', '增长负责人'];
 const durationOptions = ['15 秒', '30 秒', '45 秒', '60 秒'];
 
+function formatTimeLabel(value: string) {
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value));
+}
+
 export default function Home() {
   const [form, setForm] = useState<SubmitTaskPayload>({
     videoTarget: videoTargetOptions[0],
@@ -24,13 +38,30 @@ export default function Home() {
     targetAudience: audienceOptions[0],
     videoDuration: durationOptions[1],
   });
-
+  const [tasks, setTasks] = useState<QueueTask[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  const [message, setMessage] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
 
   const sceneLevel2Options = useMemo(() => {
     return sceneLevel2OptionsByL1[form.sceneLevel1] ?? ['默认'];
   }, [form.sceneLevel1]);
+
+  const refreshTasks = async () => {
+    setLoading(true);
+    const result = await listPendingTasks();
+    if (result.success) {
+      setTasks(result.tasks);
+    } else {
+      setMessage(`读取队列失败：${result.error}`);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refreshTasks();
+  }, []);
 
   const onSubmit = async () => {
     setSubmitting(true);
@@ -40,6 +71,7 @@ export default function Home() {
 
     if (result.success) {
       setMessage(`任务已提交，任务ID: ${result.taskId}`);
+      await refreshTasks();
     } else {
       setMessage(`提交失败：${result.error}`);
     }
@@ -48,13 +80,17 @@ export default function Home() {
   };
 
   return (
-    <main style={{ maxWidth: 720, margin: '0 auto', padding: 24 }}>
-      <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 12 }}>扣子广告素材视频自动化 · 任务提交</h1>
-      <p style={{ color: '#666', marginBottom: 20 }}>
-        这里提交的任务会写入飞书多维表格「任务队列」。前端不会暴露任何飞书 token。
-      </p>
+    <main style={{ maxWidth: 900, margin: '0 auto', padding: 24, display: 'grid', gap: 24 }}>
+      <section>
+        <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 12 }}>扣子广告素材视频自动化 · 任务提交</h1>
+        <p style={{ color: '#666', marginBottom: 20 }}>
+          页面只负责收集参数并写入 GitHub 仓库里的 JSON 队列文件。Aime 定时任务后续读取
+          <code style={{ margin: '0 4px' }}>/api/pending-tasks</code>
+          即可继续把任务写入飞书并执行生成链路。
+        </p>
+      </section>
 
-      <div style={{ display: 'grid', gap: 14 }}>
+      <section style={{ display: 'grid', gap: 14 }}>
         <label style={{ display: 'grid', gap: 6 }}>
           <span>视频目标</span>
           <select value={form.videoTarget} onChange={(e) => setForm((cur) => ({ ...cur, videoTarget: e.target.value }))}>
@@ -79,16 +115,14 @@ export default function Home() {
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <label style={{ display: 'grid', gap: 6 }}>
-            <span>素材场景一级标签</span>
+            <span>场景一级标签</span>
             <select
               value={form.sceneLevel1}
-              onChange={(e) =>
-                setForm((cur) => ({
-                  ...cur,
-                  sceneLevel1: e.target.value,
-                  sceneLevel2: (sceneLevel2OptionsByL1[e.target.value] ?? ['默认'])[0]!,
-                }))
-              }
+              onChange={(e) => {
+                const nextL1 = e.target.value;
+                const nextL2 = sceneLevel2OptionsByL1[nextL1]?.[0] ?? '默认';
+                setForm((cur) => ({ ...cur, sceneLevel1: nextL1, sceneLevel2: nextL2 }));
+              }}
             >
               {sceneLevel1Options.map((option) => (
                 <option key={option} value={option}>
@@ -99,7 +133,7 @@ export default function Home() {
           </label>
 
           <label style={{ display: 'grid', gap: 6 }}>
-            <span>素材场景二级标签</span>
+            <span>场景二级标签</span>
             <select value={form.sceneLevel2} onChange={(e) => setForm((cur) => ({ ...cur, sceneLevel2: e.target.value }))}>
               {sceneLevel2Options.map((option) => (
                 <option key={option} value={option}>
@@ -135,30 +169,46 @@ export default function Home() {
         </div>
 
         <button
-          onClick={() => void onSubmit()}
+          type="button"
+          onClick={onSubmit}
           disabled={submitting}
-          style={{
-            padding: '10px 14px',
-            borderRadius: 10,
-            border: '1px solid #111',
-            background: submitting ? '#ddd' : '#111',
-            color: submitting ? '#111' : '#fff',
-            cursor: submitting ? 'not-allowed' : 'pointer',
-            fontWeight: 600,
-          }}
+          style={{ height: 40, borderRadius: 8, border: 0, background: '#111827', color: '#fff', cursor: 'pointer' }}
         >
-          {submitting ? '提交中…' : '提交任务到飞书队列'}
+          {submitting ? '提交中…' : '提交任务'}
         </button>
 
-        {message ? (
-          <div style={{ padding: 12, borderRadius: 10, background: '#f5f5f5', border: '1px solid #eee' }}>{message}</div>
-        ) : null}
-      </div>
+        {message ? <p style={{ margin: 0, color: '#2563eb' }}>{message}</p> : null}
+      </section>
 
-      <hr style={{ margin: '28px 0', border: 'none', borderTop: '1px solid #eee' }} />
-      <p style={{ color: '#888', fontSize: 12 }}>
-        说明：任务状态字段会写入「待执行 / 执行中 / 已完成 / 生成失败」中的「待执行」。
-      </p>
+      <section style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>待处理任务队列</h2>
+          <button type="button" onClick={() => void refreshTasks()} style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '6px 12px' }}>
+            刷新
+          </button>
+        </div>
+        <p style={{ color: '#666', marginTop: 0 }}>
+          这里展示的是 GitHub 仓库 <code>data/pending-tasks.json</code> 里的当前任务列表。
+        </p>
+
+        {loading ? <p>正在读取队列…</p> : null}
+        {!loading && tasks.length === 0 ? <p>当前没有待处理任务。</p> : null}
+
+        <div style={{ display: 'grid', gap: 12 }}>
+          {tasks.map((task) => (
+            <article key={task.taskId} style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                <strong>{task.taskId}</strong>
+                <span>{task.status}</span>
+              </div>
+              <p style={{ color: '#666' }}>提交时间：{formatTimeLabel(task.submittedAt)}</p>
+              <p style={{ margin: 0 }}>
+                {task.videoGoal} / {task.featureTags} / {task.scenePrimary} / {task.sceneSecondary} / {task.audience} / {task.duration}
+              </p>
+            </article>
+          ))}
+        </div>
+      </section>
     </main>
   );
 }
