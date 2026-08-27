@@ -32,5 +32,17 @@
     "audience": "AI自动化测试验证",
     "duration": "30s",
     "count": 1
+  },
+  {
+    "taskId": "GEN-260827-UYEG",
+    "submittedAt": "2026-08-27T08:39:26.796Z",
+    "status": "待执行",
+    "videoGoal": "付费次留双高",
+    "featureTags": "视频任务",
+    "scenePrimary": "AI团队",
+    "sceneSecondary": "AI团队/多Agent协作",
+    "audience": "漫剧工作室",
+    "duration": "30s",
+    "count": 1
   }
 ]
