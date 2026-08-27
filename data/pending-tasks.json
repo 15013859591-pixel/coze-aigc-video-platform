@@ -20,5 +20,17 @@
     "sceneSecondary": "联调验证",
     "audience": "内部测试",
     "duration": "15s"
+  },
+  {
+    "taskId": "GEN-260827-BIXD",
+    "submittedAt": "2026-08-27T08:04:41.727Z",
+    "status": "待执行",
+    "videoGoal": "付费次留双高",
+    "featureTags": "视频任务",
+    "scenePrimary": "自媒体与内容创作",
+    "sceneSecondary": "AI漫剧与短剧",
+    "audience": "AI自动化测试验证",
+    "duration": "30s",
+    "count": 1
   }
 ]
