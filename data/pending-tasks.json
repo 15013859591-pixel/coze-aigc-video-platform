@@ -9,5 +9,16 @@
     "sceneSecondary": "加班场景",
     "audience": "25-35岁职场人",
     "duration": "30s"
+  },
+  {
+    "taskId": "GEN-260827-4688",
+    "submittedAt": "2026-08-27T06:49:09.646Z",
+    "status": "待执行",
+    "videoGoal": "Aime 自动部署联调验证",
+    "featureTags": "自动化部署",
+    "scenePrimary": "产品演示",
+    "sceneSecondary": "联调验证",
+    "audience": "内部测试",
+    "duration": "15s"
   }
 ]
