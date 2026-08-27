@@ -9,14 +9,86 @@ import {
 } from '../lib/task-queue-client';
 
 const videoTargetOptions = ['高点击', '高付费', '高留存', '付费 × 次留双高'];
-const sellingPointLevel1Options = ['模板开箱即用', '真实 UI 演示', '自动化工作流', '一键生成视频素材'];
-const sceneLevel1Options = ['自媒体运营', '项目管理', '行业研究', '办公提效'];
+
+// 功能卖点一级标签 — 来源：飞书多维表格「爆款素材拆解」字段 fldNQk4gL7
+const sellingPointLevel1Options = [
+  '视频任务',
+  '综合功能3.0',
+  'Excel任务',
+  '项目管理',
+  '编程项目',
+  '云设备',
+  'PPT任务',
+  '综合功能2.5',
+  'AI团队',
+  '主agent-拟人心智',
+  '新建Agent',
+  '技能商店',
+  '写作任务',
+  '日程管理',
+  '综合功能',
+  '设计任务',
+];
+
+// 素材场景一级标签 — 来源：飞书多维表格「爆款素材拆解」字段 fldSJFjLZp
+const sceneLevel1Options = [
+  'AI团队',
+  '专业领域与科研',
+  '交通出行',
+  '内容创作与AI办公',
+  '创业与商业变现',
+  '办公/商务',
+  '办公/理财',
+  '办公/科技',
+  '办公场景',
+  '室内办公场景',
+  '无场景',
+  '泛生活与个人成长',
+  '电商与广告营销',
+  '电商办公',
+  '网文与创作',
+  '职场',
+  '职场/专家办公场景',
+  '职场/商务',
+  '职场办公',
+  '职场办公场景',
+  '职场工作场景',
+  '自媒体与内容创作',
+  '虚拟背景演示',
+];
+
+// 素材场景二级标签 — 根据一级标签联动，来源：飞书多维表格记录中的实际配对
 const sceneLevel2OptionsByL1: Record<string, string[]> = {
-  自媒体运营: ['爆款拆解', '账号起盘', '选题策划', '脚本分镜'],
-  项目管理: ['需求评审', '周报自动化', '会议纪要', '里程碑跟踪'],
-  行业研究: ['竞品分析', '报告生成', '数据整理', '洞察提炼'],
-  办公提效: ['表格处理', '文档写作', '邮件总结', '知识库整理'],
+  AI团队: ['AI团队/多Agent协作'],
+  专业领域与科研: ['代码与研发', '职场提效', '财务与合规', '金融与理财'],
+  交通出行: ['高铁车厢'],
+  内容创作与AI办公: ['Excel/数据报表分析'],
+  创业与商业变现: ['一人公司', '个体户', '游戏开发', '电商'],
+  '办公/商务': ['客户管理/协同办公'],
+  '办公/理财': ['炒股复盘/自动化工具'],
+  '办公/科技': ['多Agent协作界面'],
+  办公场景: ['会议/项目管理', '工位'],
+  室内办公场景: ['居家/工作室'],
+  无场景: ['无场景'],
+  泛生活与个人成长: ['个人提效', '个人求职'],
+  电商与广告营销: ['AI团队/多Agent协作', '电商主图/广告设计', '自媒体内容运营'],
+  电商办公: ['营销短视频创作'],
+  网文与创作: ['自媒体'],
+  职场: ['办公室内'],
+  '职场/专家办公场景': ['AI开发实操演示'],
+  '职场/商务': ['楼梯/办公室'],
+  职场办公: ['个人提升', '办公室', '项目管理'],
+  职场办公场景: ['个人提升', '职场办公场景', '自媒体'],
+  职场工作场景: ['述职报告准备'],
+  自媒体与内容创作: ['AI漫剧与短剧', '广告营销', '网文与创作', '职场提效', '自媒体'],
+  虚拟背景演示: ['产品UI演示+矢量插画'],
 };
+
+// 全部二级标签（用于无对应关系时的兜底展示）
+const allSceneLevel2Options = Array.from(
+  new Set(Object.values(sceneLevel2OptionsByL1).flat()),
+).sort();
+
 const audienceOptions = ['内容运营 / 创作者', '团队管理者', '知识工作者', '增长负责人'];
 const durationOptions = ['15 秒', '30 秒', '45 秒', '60 秒'];
 
@@ -34,7 +106,7 @@ export default function Home() {
     videoTarget: videoTargetOptions[0],
     sellingPointLevel1: sellingPointLevel1Options[0],
     sceneLevel1: sceneLevel1Options[0],
-    sceneLevel2: sceneLevel2OptionsByL1[sceneLevel1Options[0]]?.[0] ?? '默认',
+    sceneLevel2: sceneLevel2OptionsByL1[sceneLevel1Options[0]]?.[0] ?? allSceneLevel2Options[0],
     targetAudience: audienceOptions[0],
     videoDuration: durationOptions[1],
   });
@@ -44,7 +116,7 @@ export default function Home() {
   const [message, setMessage] = useState('');
 
   const sceneLevel2Options = useMemo(() => {
-    return sceneLevel2OptionsByL1[form.sceneLevel1] ?? ['默认'];
+    return sceneLevel2OptionsByL1[form.sceneLevel1] ?? allSceneLevel2Options;
   }, [form.sceneLevel1]);
 
   const refreshTasks = async () => {
@@ -115,12 +187,12 @@ export default function Home() {
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <label style={{ display: 'grid', gap: 6 }}>
-            <span>场景一级标签</span>
+            <span>素材场景一级标签</span>
             <select
               value={form.sceneLevel1}
               onChange={(e) => {
                 const nextL1 = e.target.value;
-                const nextL2 = sceneLevel2OptionsByL1[nextL1]?.[0] ?? '默认';
+                const nextL2 = sceneLevel2OptionsByL1[nextL1]?.[0] ?? allSceneLevel2Options[0];
                 setForm((cur) => ({ ...cur, sceneLevel1: nextL1, sceneLevel2: nextL2 }));
               }}
             >
