@@ -1,1 +1,13 @@
-[]
+[
+  {
+    "taskId": "TEST-260827-ABCD",
+    "submittedAt": "2026-08-27T06:00:00Z",
+    "status": "待执行",
+    "videoGoal": "付费次留双高",
+    "featureTags": "视频任务",
+    "scenePrimary": "职场",
+    "sceneSecondary": "加班场景",
+    "audience": "25-35岁职场人",
+    "duration": "30s"
+  }
+]
